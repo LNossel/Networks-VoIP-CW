@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="voip">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/src/io/github/lnossel/voip.jar!/" />
+      <root url="jar://$PROJECT_DIR$/src/io/github/lnossel/AudioLib.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

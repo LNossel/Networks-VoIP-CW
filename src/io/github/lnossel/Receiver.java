@@ -38,6 +38,8 @@ public class Receiver implements Runnable {
             e.printStackTrace();
         }
 
+        Security security = new Security(1);
+
         while (running){
 
             try{
@@ -47,6 +49,7 @@ public class Receiver implements Runnable {
 
                 receiving_socket.receive(packet);
 
+                buffer = security.applyXOR(buffer);
                 player.playBlock(buffer);
 
             } catch (IOException e){

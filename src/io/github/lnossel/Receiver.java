@@ -59,4 +59,9 @@ public class Receiver implements Runnable {
         receiving_socket.close();
         //***************************************************
     }
+
+    private DatagramPacket Decrypt(DatagramPacket packet){
+        return packet;
+    }
+
 }

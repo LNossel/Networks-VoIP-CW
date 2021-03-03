@@ -77,6 +77,8 @@ public class Sender implements Runnable{
                 //Convert it to an array of bytes
                 byte[] buffer = recorder.getBlock();
 
+                buffer = security.applyXOR(buffer);
+
                 //Make a DatagramPacket from it, with client address and port number
                 DatagramPacket packet = new DatagramPacket(buffer, buffer.length, clientIP, PORT);
 
@@ -94,6 +96,10 @@ public class Sender implements Runnable{
         recorder.close();
         sending_socket.close();
         //***************************************************
+    }
+
+    private DatagramPacket Encrypt(DatagramPacket packet){
+        return packet;
     }
 
 }

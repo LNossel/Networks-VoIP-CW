@@ -1,51 +1,40 @@
 package io.github.lnossel;
 
-/*
- * Sender.java
- */
-
-/**
- *
- * @author  abj
- */
-import java.net.*;
-import java.io.*;
 import CMPC3M06.AudioRecorder;
 
 import javax.sound.sampled.LineUnavailableException;
+import java.io.IOException;
+import java.net.*;
+import java.nio.ByteBuffer;
 
-public class Sender implements Runnable{
+public class Sender implements Runnable {
 
     static DatagramSocket sending_socket;
+    static AudioRecorder recorder;
+    static InetAddress clientIP;
+    static int PORT = 55555;
 
-    public void start(){
-        Thread thread = new Thread(this);
-        thread.start();
-    }
-
-    public void run (){
-
-        //***************************************************
-        //Port to send to
-        int PORT = 55555;
-        //IP ADDRESS to send to
-        InetAddress clientIP = null;
+    public Sender(String host) {
+//        attempt to get the client IP address
         try {
-            clientIP = InetAddress.getByName("DESKTOP-07P05RV");  //CHANGE localhost to IP or NAME of client machine
-        } catch (UnknownHostException e) {
+            clientIP = InetAddress.getByName(host);
+        } catch(UnknownHostException e) {
             System.out.println("ERROR: TextSender: Could not find client IP");
             e.printStackTrace();
             System.exit(0);
         }
-        //***************************************************
+    }
 
-        //***************************************************
-        //Open a socket to send from
-        //We dont need to know its port number as we never send anything to it.
-        //We need the try and catch block to make sure no errors occur.
+    public void start() {
+        Thread thread = new Thread(this);
+        thread.start();
+    }
 
-        //DatagramSocket sending_socket;
-        try{
+    public void run() {
+        boolean connected = true;
+
+//        prepare a socket for communication
+        try {
             sending_socket = new DatagramSocket();
         } catch (SocketException e){
             System.out.println("ERROR: TextSender: Could not open UDP socket to send from.");
@@ -53,49 +42,70 @@ public class Sender implements Runnable{
             System.exit(0);
         }
 
-        boolean running = true;
-
-        //initialising new AudioRecorder Object
-        AudioRecorder recorder = null;
+//        prepare an audio recorder
         try {
             recorder = new AudioRecorder();
         } catch (LineUnavailableException e) {
             e.printStackTrace();
+            System.exit(0);
         }
 
-        Security security = new Security(10);
-
-        while (running){
-            try{
-                //Read in a string from the standard input
-                //String str = in.readLine(); //
-
-                //Convert it to an array of bytes
-                byte[] buffer = recorder.getBlock();
-
-                buffer = security.applyXOR(buffer);
-
-                //Make a DatagramPacket from it, with client address and port number
-                DatagramPacket packet = new DatagramPacket(buffer, buffer.length, clientIP, PORT);
-
-                //Send it
-                sending_socket.send(packet);
-
-                //The user can type EXIT to quit
-
-            } catch (IOException e){
-                System.out.println("ERROR: VoiceSender: Some random IO error occured!");
-                e.printStackTrace();
-            }
+        while (connected) {
+            byte[] data = recordData();
+            byte[] encryptedData = encryptData(data);
+            sendData(encryptedData);
         }
-        //Close the socket and recorder
+
         recorder.close();
         sending_socket.close();
-        //***************************************************
     }
 
-    private DatagramPacket Encrypt(DatagramPacket packet){
-        return packet;
+    private byte[] recordData() {
+        byte[] data = new byte[512];
+        try {
+            data = recorder.getBlock();
+        } catch (IOException e) {
+            System.out.println("ERROR: VoiceSender: Some random IO error occurred!");
+            e.printStackTrace();
+        }
+        return data;
     }
 
+    private byte[] encryptData(byte[] data) {
+        return applyXOR(data);
+    }
+
+    private void sendData(byte[] data) {
+//        add authentication header
+//        ByteBuffer buf = ByteBuffer.allocate(514);
+//        short authenticationKey = 10;
+//        buf.putShort(authenticationKey);
+//        buf.put(data);
+//        data = buf.array();
+
+        DatagramPacket packet = new DatagramPacket(data, data.length, clientIP, PORT);
+
+        try {
+            sending_socket.send(packet);
+        } catch (IOException e) {
+            System.out.println("ERROR: VoiceSender: Some random IO error occurred!");
+            e.printStackTrace();
+        }
+    }
+
+    static byte[] applyXOR(byte[] data) {
+        int key = 10;
+        ByteBuffer unwrapDecrypt;
+        ByteBuffer cipherText;
+        int fourByte;
+        unwrapDecrypt = ByteBuffer.allocate(data.length);
+
+        cipherText = ByteBuffer.wrap(data);
+        for (int j = 0; j < data.length/4; j++) {
+            fourByte = cipherText.getInt();
+            fourByte = fourByte ^ key;
+            unwrapDecrypt.putInt(fourByte);
+        }
+        return unwrapDecrypt.array();
+    }
 }

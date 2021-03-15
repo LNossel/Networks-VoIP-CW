@@ -4,6 +4,7 @@ import CMPC3M06.AudioPlayer;
 import uk.ac.uea.cmp.voip.*;
 
 import javax.sound.sampled.LineUnavailableException;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -17,6 +18,7 @@ public class Receiver implements Runnable {
     static DatagramSocket receiving_socket;
     static AudioPlayer player;
     static int PORT = 55555;
+    static byte[] header = new byte[2];
 
     public void start() {
         Thread thread = new Thread(this);
@@ -51,7 +53,7 @@ public class Receiver implements Runnable {
     }
 
     private byte[] receiveData() {
-        byte[] buffer = new byte[512];
+        byte[] buffer = new byte[514];
         DatagramPacket packet = new DatagramPacket(buffer, 0, buffer.length);
 
         try {
@@ -60,6 +62,13 @@ public class Receiver implements Runnable {
             System.out.println("ERROR: VoiceReceiver: Some random IO error occurred!");
             e.printStackTrace();
         }
+
+        byte[] data = new byte[512];
+        System.arraycopy(buffer, 0, header, 0, header.length);
+        System.arraycopy(buffer, header.length, data, 0, data.length);
+
+        System.out.println(new String(header));
+        System.out.println(new String(data));
 
         return buffer;
     }

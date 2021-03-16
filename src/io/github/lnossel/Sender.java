@@ -21,6 +21,11 @@ public class Sender implements Runnable {
     static InetAddress clientIP;
     static int PORT = 55555;
 
+    public int socketNum = 1;
+
+    Analysis analysis;
+    public int counter = 0;
+
     public Sender(String host, Analysis analysis) {
 //        attempt to get the client IP address
         try {
@@ -136,6 +141,17 @@ public class Sender implements Runnable {
             System.out.println("ERROR: VoiceSender: Some random IO error occurred!");
             e.printStackTrace();
         }
+    }
+
+
+    static byte[] addHeader(byte[] header, byte[] data){
+        //create new payload
+        byte[] payload = new byte[data.length + header.length];
+
+        System.arraycopy(header, 0, payload, 0, header.length);
+        System.arraycopy(payload, 0, header, header.length, payload.length);
+
+        return payload;
     }
 
     static byte[] applyXOR(byte[] data) {

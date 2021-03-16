@@ -60,6 +60,8 @@ public class Receiver implements Runnable {
             e.printStackTrace();
         }
 
+        //ByteBuffer buf = new ByteBuffer.allocate(512);
+
         while (connected) {
             byte[] encryptedData = receiveData();
             if (header[1] == 10){
@@ -99,10 +101,10 @@ public class Receiver implements Runnable {
         System.arraycopy(buffer, 0, header, 0, header.length);
         System.arraycopy(buffer, header.length, data, 0, data.length);
 
-        System.out.println(new String(header));
-        System.out.println(new String(data));
+        System.out.println(Arrays.toString(data));
+        System.out.println(Arrays.toString(header));
 
-        return buffer;
+        return data;
     }
 
     private byte[] decryptData(byte[] data) {

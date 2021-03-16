@@ -1,21 +1,27 @@
 package io.github.lnossel;
 
 import CMPC3M06.AudioRecorder;
+import uk.ac.uea.cmp.voip.DatagramSocket4;
+import uk.ac.uea.cmp.voip.DatagramSocket3;
+import uk.ac.uea.cmp.voip.DatagramSocket2;
 
 import javax.sound.sampled.LineUnavailableException;
 import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 
+
 public class Sender implements Runnable {
 
     static DatagramSocket sending_socket;
+    static DatagramSocket2 sending_socket2;
+    static DatagramSocket3 sending_socket3;
+    static DatagramSocket4 sending_socket4;
     static AudioRecorder recorder;
     static InetAddress clientIP;
     static int PORT = 55555;
 
-
-    public Sender(String host) {
+    public Sender(String host, Analysis analysis) {
 //        attempt to get the client IP address
         try {
             clientIP = InetAddress.getByName(host);
@@ -24,6 +30,21 @@ public class Sender implements Runnable {
             e.printStackTrace();
             System.exit(0);
         }
+        this.analysis = analysis;
+    }
+
+    public Sender(String host, Analysis analysis, int dsNum) {
+
+        try {
+            clientIP = InetAddress.getByName(host);
+        } catch(UnknownHostException e) {
+            System.out.println("ERROR: TextSender: Could not find client IP");
+            e.printStackTrace();
+            System.exit(0);
+        }
+        this.analysis = analysis;
+        this.socketNum = dsNum;
+
     }
 
     public void start() {
@@ -36,7 +57,12 @@ public class Sender implements Runnable {
 
 //        prepare a socket for communication
         try {
-            sending_socket = new DatagramSocket();
+            switch (this.socketNum) {
+                case 1 -> sending_socket = new DatagramSocket();
+                case 2 -> sending_socket2 = new DatagramSocket2();
+                case 3 -> sending_socket3 = new DatagramSocket3();
+                case 4 -> sending_socket4 = new DatagramSocket4();
+            }
         } catch (SocketException e){
             System.out.println("ERROR: TextSender: Could not open UDP socket to send from.");
             e.printStackTrace();
@@ -58,7 +84,12 @@ public class Sender implements Runnable {
         }
 
         recorder.close();
-        sending_socket.close();
+        switch (this.socketNum) {
+            case 1 -> sending_socket.close();
+            case 2 -> sending_socket2.close();
+            case 3 -> sending_socket3.close();
+            case 4 -> sending_socket4.close();
+        }
     }
 
     private byte[] recordData() {
@@ -87,21 +118,24 @@ public class Sender implements Runnable {
         DatagramPacket packet = new DatagramPacket(data, data.length, clientIP, PORT);
 
         try {
-            sending_socket.send(packet);
+            switch (this.socketNum) {
+                case 1 -> sending_socket.send(packet);
+                case 2 -> sending_socket2.send(packet);
+                case 3 -> sending_socket3.send(packet);
+                case 4 -> sending_socket4.send(packet);
+            }
+
+            counter++;
+            System.out.println(counter);
+
+            if(counter % 10 == 0){
+                analysis.setSentCount(counter);
+            }
+
         } catch (IOException e) {
             System.out.println("ERROR: VoiceSender: Some random IO error occurred!");
             e.printStackTrace();
         }
-    }
-
-    static byte[] addHeader(byte[] header, byte[] data){
-        //create new payload
-        byte[] payload = new byte[data.length + header.length];
-
-        System.arraycopy(header, 0, payload, 0, header.length);
-        System.arraycopy(payload, 0, header, header.length, payload.length);
-
-        return payload;
     }
 
     static byte[] applyXOR(byte[] data) {
@@ -119,4 +153,6 @@ public class Sender implements Runnable {
         }
         return unwrapDecrypt.array();
     }
+
+
 }

@@ -12,8 +12,16 @@ public class Main {
         Scanner sc = new Scanner(System.in);
         String calleeAddress = sc.nextLine();
 
-        Sender sender = new Sender(calleeAddress);
-        Receiver receiver = new Receiver();
+        System.out.println("Which DatagramSocket is to be used? (1/2/3/4)");
+        int dsNum = sc.nextInt();
+
+        System.out.println("Toggle on System Analysis? (1/0): ");
+        int analysisToggle = sc.nextInt();
+
+
+        Analysis analysis = new Analysis();
+        Sender sender = new Sender(calleeAddress, analysis, dsNum);
+        Receiver receiver = new Receiver(analysis, dsNum);
 
         sender.start();
         receiver.start();

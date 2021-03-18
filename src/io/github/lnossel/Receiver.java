@@ -10,7 +10,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
+import java.util.*;
 
 import static io.github.lnossel.Sender.applyXOR;
 
@@ -24,9 +24,25 @@ public class Receiver implements Runnable {
     static int PORT = 55555;
     static byte[] header = new byte[2];
 
-    Analysis analysis;
-    int socketNum;
-    int counter = 0;
+    static Analysis analysis;
+    static int socketNum;
+    static int counter = 0;
+
+    //used for reordering numbered packets
+    static HashMap<Byte, byte[]> orderMap = new HashMap<Byte, byte[]>();
+    static int minHeader = 0;
+    static boolean mapConstructed;
+
+    //used for packet loss concealment
+    static boolean concealerConstructed;
+    static byte[] previousPacket;
+    static byte previousPacketHeader;
+    static byte packetCounter;
+    static List<byte[]> previousPackets = new ArrayList<byte[]>(10);
+
+    //acknowledgement
+    public static boolean ack = false;
+
 
     public Receiver(Analysis analysis, int dsNum) {
         this.analysis = analysis;
@@ -64,10 +80,27 @@ public class Receiver implements Runnable {
 
         while (connected) {
             byte[] encryptedData = receiveData();
-            if (header[1] == 10){
 
-                byte[] data = decryptData(encryptedData);
-                playData(data);
+
+            switch (socketNum) {
+                case 2 -> encryptedData = packetLossConcealment(header[0], encryptedData);
+                //case 3 -> encryptedData = checkOrder(encryptedData);
+            }
+
+            //packet reordering for datasocket3
+
+            //encryptedData = checkOrder(encryptedData);
+
+            //packet loss check for datasocket 2,3
+            //encryptedData = packetLossConcealment(header[0], encryptedData);
+
+
+            if (header[1] == 10){
+                if(encryptedData != null) {
+                    byte[] data = decryptData(encryptedData);
+                    System.out.println("packet played: " + Arrays.toString(header) + Arrays.toString(data));
+                    playData(encryptedData);
+                }
             }
         }
 
@@ -78,6 +111,140 @@ public class Receiver implements Runnable {
             case 3 -> receiving_socket3.close();
             case 4 -> receiving_socket4.close();
         }
+    }
+
+    private static synchronized byte[] packetLossConcealment(byte header, byte[] encryptedData){
+
+        System.out.println("header" + header);
+
+        if(!concealerConstructed){
+            previousPacket = encryptedData;
+            previousPacketHeader = header;
+            concealerConstructed = true;
+            previousPackets.add(previousPacket);
+            return encryptedData;
+        }
+        else {
+            if(header - previousPacketHeader == 1 || header - previousPacketHeader == 99){
+                previousPacket = encryptedData;
+                previousPacketHeader = header;
+
+                System.out.println("packet played: " + header + Arrays.toString(previousPacket));
+                if (previousPackets.size() == 10 && checkPacket(previousPacket)) {
+                    previousPackets.remove(0);
+                }
+                if (checkPacket(previousPacket)) {
+                    previousPackets.add(previousPacket);
+                }
+            }
+            else{
+                int header_difference = header - previousPacketHeader;
+                System.out.println("previousHeader: " + previousPacketHeader);
+                System.out.println("header diff: " + header_difference);
+
+
+                if(previousPackets.size() < header_difference) {
+                    for (int i = 1; i < header_difference; i++) {
+                        byte[] data = decryptData(previousPackets.get(i%previousPackets.size()));
+                        System.out.println("packet played: " + i%previousPackets.size() + "  " + header + Arrays.toString(data));
+                        playData(data);
+                    }
+                }
+                else{
+                    for (int i = 1; i < header_difference; i++) {
+                        byte[] data = decryptData(previousPackets.get(i));
+                        System.out.println("packet played: " + header + Arrays.toString(data));
+                        playData(data);
+                    }
+                }
+                System.out.println("packet played: " + header + Arrays.toString(previousPacket));
+                previousPacket = encryptedData;
+                previousPacketHeader = header;
+            }
+
+            System.out.println(previousPackets.toString());
+            return previousPacket;
+
+        }
+    }
+
+    private static boolean checkPacket(byte[] packet){
+        int checkCounter = 0;
+        for(byte bite : packet){
+            if(bite < 11 && bite > -11){
+                checkCounter++;
+            }
+            if(checkCounter > packet.length/2){
+                System.out.println("dropped: " + packet);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private synchronized byte[] checkOrder(byte[] encryptedData) {
+
+        byte[] encryptedPayload;
+
+        if(orderMap.size() == 10) {
+            mapConstructed = true;
+        }
+
+        if(!mapConstructed) {
+
+            orderMap.put(header[0], encryptedData);
+            System.out.println(orderMap.toString());
+
+
+            byte[] empty = new byte[512];
+            return empty;
+
+        }
+        else {
+
+            System.out.println(orderMap.toString());
+
+            int intHeader;
+            int newMinHeader = minHeader;
+
+            for ( Byte key : orderMap.keySet() ) {
+
+                intHeader = key;
+                //included for chance of packet loss
+                newMinHeader = minHeader;
+
+                //System.out.println("intHeader" + intHeader);
+                if(intHeader - minHeader == 1 || intHeader - minHeader == -99){
+                    newMinHeader = intHeader;
+                    break;
+                }
+
+
+            }
+
+            if(newMinHeader == minHeader){
+                minHeader++;
+                encryptedPayload = checkOrder(encryptedData);
+            }
+            else {
+
+                minHeader = newMinHeader;
+
+                //System.out.println("MINHEADER:" + minHeader);
+
+                encryptedPayload = orderMap.get((byte) minHeader);
+                orderMap.remove((byte) minHeader);
+
+                orderMap.put(header[0], encryptedData);
+
+            }
+
+            return encryptedPayload;
+
+        }
+
+
+
     }
 
     private byte[] receiveData() {
@@ -97,23 +264,25 @@ public class Receiver implements Runnable {
             e.printStackTrace();
         }
 
+        System.out.println(Arrays.toString(buffer));
+
         byte[] data = new byte[512];
         System.arraycopy(buffer, 0, header, 0, header.length);
         System.arraycopy(buffer, header.length, data, 0, data.length);
 
-        System.out.println(Arrays.toString(data));
-        System.out.println(Arrays.toString(header));
+        //System.out.println(Arrays.toString(data));
+        //System.out.println(Arrays.toString(header));
 
         return data;
     }
 
-    private byte[] decryptData(byte[] data) {
+    private static byte[] decryptData(byte[] data) {
         return applyXOR(data);
     }
 
-    private void playData(byte[] data) {
-        System.out.println(header[1]);
-        System.out.println("worked!");
+    private static synchronized void playData(byte[] data) {
+        //System.out.println(header[1]);
+        //System.out.println("worked!");
         try {
             player.playBlock(data);
             counter++;

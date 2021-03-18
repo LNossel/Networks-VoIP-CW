@@ -9,6 +9,8 @@ import javax.sound.sampled.LineUnavailableException;
 import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.HashMap;
 
 
 public class Sender implements Runnable {
@@ -24,19 +26,10 @@ public class Sender implements Runnable {
     public int socketNum = 1;
 
     Analysis analysis;
-    public int counter = 0;
+    public static int counter = 0;
 
-    public Sender(String host, Analysis analysis) {
-//        attempt to get the client IP address
-        try {
-            clientIP = InetAddress.getByName(host);
-        } catch(UnknownHostException e) {
-            System.out.println("ERROR: TextSender: Could not find client IP");
-            e.printStackTrace();
-            System.exit(0);
-        }
-        this.analysis = analysis;
-    }
+    public static int packetNumber = 1;
+
 
     public Sender(String host, Analysis analysis, int dsNum) {
 
@@ -85,6 +78,7 @@ public class Sender implements Runnable {
         while (connected) {
             byte[] data = recordData();
             byte[] encryptedData = encryptData(data);
+
             sendData(encryptedData);
         }
 
@@ -112,13 +106,18 @@ public class Sender implements Runnable {
         return applyXOR(data);
     }
 
-    private void sendData(byte[] data) {
+    synchronized private void sendData(byte[] data) {
 //        add authentication header
         ByteBuffer buf = ByteBuffer.allocate(514);
         short authenticationKey = 10;
         buf.putShort(authenticationKey);
         buf.put(data);
         data = buf.array();
+
+        //adding packet numbers
+        data = addHeader(data);
+
+        //System.out.println(Arrays.toString(data));
 
         DatagramPacket packet = new DatagramPacket(data, data.length, clientIP, PORT);
 
@@ -131,7 +130,7 @@ public class Sender implements Runnable {
             }
 
             counter++;
-            System.out.println(counter);
+            //System.out.println(counter);
 
             if(counter % 10 == 0){
                 analysis.setSentCount(counter);
@@ -144,18 +143,21 @@ public class Sender implements Runnable {
     }
 
 
-    static byte[] addHeader(byte[] header, byte[] data){
-        //create new payload
-        byte[] payload = new byte[data.length + header.length];
 
-        System.arraycopy(header, 0, payload, 0, header.length);
-        System.arraycopy(payload, 0, header, header.length, payload.length);
 
-        return payload;
+    synchronized byte[] addHeader(byte[] data){
+
+        if (packetNumber == 100){
+            packetNumber = 1;
+        }
+
+        data[0] = (byte) packetNumber++;
+
+        return data;
     }
 
     static byte[] applyXOR(byte[] data) {
-        int key = 10;
+        int key = 99999940;
         ByteBuffer unwrapDecrypt;
         ByteBuffer cipherText;
         int fourByte;

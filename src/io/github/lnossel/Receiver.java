@@ -43,10 +43,14 @@ public class Receiver implements Runnable {
     //acknowledgement
     public static boolean ack = false;
 
+    //Encryption Demo
+    private static int encryptToggle;
 
-    public Receiver(Analysis analysis, int dsNum) {
+
+    public Receiver(Analysis analysis, int dsNum, int encryptToggle) {
         this.analysis = analysis;
         this.socketNum = dsNum;
+        this.encryptToggle = encryptToggle;
     }
 
     public void start() {
@@ -84,7 +88,7 @@ public class Receiver implements Runnable {
 
             switch (socketNum) {
                 case 2 -> encryptedData = packetLossConcealment(header[0], encryptedData);
-                //case 3 -> encryptedData = checkOrder(encryptedData);
+                case 3 -> encryptedData = checkOrder(encryptedData);
             }
 
             //packet reordering for datasocket3
@@ -99,7 +103,15 @@ public class Receiver implements Runnable {
                 if(encryptedData != null) {
                     byte[] data = decryptData(encryptedData);
                     System.out.println("packet played: " + Arrays.toString(header) + Arrays.toString(data));
-                    playData(encryptedData);
+
+                    //for encryption demo
+                    if (encryptToggle == 1) {
+                        data = applyXOR(data);
+                    }
+
+                    playData(data);
+
+
                 }
             }
         }
@@ -112,6 +124,20 @@ public class Receiver implements Runnable {
             case 4 -> receiving_socket4.close();
         }
     }
+
+    /**
+     * PacketLossConcealment() [DatagramSocket2 & 3]
+     *
+     * ~ To store and replay the last X received packets in order where X is the amount of lost packets in a row
+     *
+     * 1. Generates an ArrayList of bytes[] of size 10.
+     * 2. successfully received packets are then added to the ArrayList
+     * 3. When the ArrayList reaches size 10 it acts as a Queue
+     *
+     * @param header
+     * @param encryptedData
+     * @return byte[]
+     */
 
     private static synchronized byte[] packetLossConcealment(byte header, byte[] encryptedData){
 
@@ -168,6 +194,20 @@ public class Receiver implements Runnable {
         }
     }
 
+    /**
+     * checkPacket() [Datagram Socket 2 & 3]
+     *
+     * ~ Check if packet is most likely background noise and if so return false.
+     * ~ Used in PacketLossConcealment to ensure no 'empty' packets are stored in queue to be replayed
+     *
+     * 1. Check all bytes found in packet
+     * 2. If the byte number in the packet is lower than 10, higher than -10, this indicates that byte is most likely 'empty'
+     * 3. If more than half of the packet is made up of these empty bytes, return false.
+     *
+     * @param packet
+     * @return boolean
+     */
+
     private static boolean checkPacket(byte[] packet){
         int checkCounter = 0;
         for(byte bite : packet){
@@ -181,6 +221,18 @@ public class Receiver implements Runnable {
         }
         return true;
     }
+
+    /**
+     * checkOrder() [DatagramSocket 3]
+     *
+     * ~ Holds last 10 packets received before sending them to be played
+     *
+     * 1. Generate circular Hashmap (acting as circular queue) of key: header, value: encrypted data
+     * 2. When requested, Hashmap returns encrypted data with the lowest Header (playing packets in order)
+     *
+     * @param encryptedData
+     * @return byte[]
+     */
 
     private synchronized byte[] checkOrder(byte[] encryptedData) {
 
@@ -263,6 +315,7 @@ public class Receiver implements Runnable {
             System.out.println("ERROR: VoiceReceiver: Some random IO error occurred!");
             e.printStackTrace();
         }
+
 
         System.out.println(Arrays.toString(buffer));
 

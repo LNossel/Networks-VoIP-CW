@@ -157,7 +157,7 @@ public class Sender implements Runnable {
     }
 
     static byte[] applyXOR(byte[] data) {
-        int key = 99999940;
+        int key = 100000000;
         ByteBuffer unwrapDecrypt;
         ByteBuffer cipherText;
         int fourByte;
